@@ -138,15 +138,22 @@ async def _run_login(profile: str, ctx: Context | None = None) -> bool:
     except Exception:
         return False
 
-    storage_file = target_dir / "storage_state.json"
+    from notebooklm.paths import get_storage_path
+    storage_file = get_storage_path()
     return storage_file.exists() and process.returncode == 0
 
 
 async def _create_client(profile: str) -> NotebookLMClient:
     """Create and initialise a NotebookLM client for the given profile."""
-    profile_dir = _resolve_profile_dir(profile)
-    os.environ["NOTEBOOKLM_HOME"] = str(profile_dir)
-    client = await NotebookLMClient.from_storage()
+    home_env = os.environ.get("NOTEBOOKLM_HOME")
+    if home_env:
+        profile_dir = Path(home_env)
+    else:
+        profile_dir = _resolve_profile_dir(profile)
+        os.environ["NOTEBOOKLM_HOME"] = str(profile_dir)
+    from notebooklm.paths import get_storage_path
+    storage_path = get_storage_path()
+    client = await NotebookLMClient.from_storage(path=str(storage_path))
     if hasattr(client, "__aenter__"):
         await client.__aenter__()
     return client
@@ -166,6 +173,35 @@ async def _ensure_authenticated(
     if app.client is not None:
         try:
             await app.client.notebooks.list()
+            return True
+        except Exception:
+            pass
+
+    # CSRF tokens expire in minutes — try recreating the client from stored
+    # cookies before falling back to browser login.
+    try:
+        if app.client is not None:
+            with suppress(Exception):
+                await app.client.__aexit__(None, None, None)
+        app.client = await _create_client(app.profile)
+        await app.client.notebooks.list()
+        return True
+    except Exception:
+        pass
+
+    # Before attempting a headless browser login (which can't open a GUI),
+    # try copying cookies from the default profile — works when the user has
+    # logged in normally via `notebooklm login` without NOTEBOOKLM_HOME set.
+    default_storage = Path.home() / ".notebooklm" / "profiles" / "default" / "storage_state.json"
+    home_env = os.environ.get("NOTEBOOKLM_HOME")
+    diet_storage = (Path(home_env) if home_env else _resolve_profile_dir(app.profile)) / "profiles" / "default" / "storage_state.json"
+    if default_storage.exists() and default_storage != diet_storage:
+        try:
+            import shutil
+            shutil.copy2(str(default_storage), str(diet_storage))
+            app.client = await _create_client(app.profile)
+            await app.client.notebooks.list()
+            await ctx.info("Re-authenticated by syncing cookies from default profile.")
             return True
         except Exception:
             pass
@@ -195,8 +231,14 @@ async def _ensure_authenticated(
 async def app_lifespan(server: FastMCP) -> AsyncIterator[AppContext]:
     """Manage NotebookLM client lifecycle."""
     profile = _current_profile_name()
-    profile_dir = _resolve_profile_dir(profile)
-    storage_file = profile_dir / "storage_state.json"
+    home_env = os.environ.get("NOTEBOOKLM_HOME")
+    if home_env:
+        profile_dir = Path(home_env)
+    else:
+        profile_dir = _resolve_profile_dir(profile)
+        os.environ["NOTEBOOKLM_HOME"] = str(profile_dir)
+    from notebooklm.paths import get_storage_path
+    storage_file = get_storage_path()
 
     client = None
     if storage_file.exists():
