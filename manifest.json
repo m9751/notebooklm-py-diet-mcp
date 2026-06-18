@@ -1,0 +1,13 @@
+{
+  "name": "notebooklm-py-diet-mcp",
+  "type": "mcp-server",
+  "description": "Workflow-oriented Python MCP server wrapping notebooklm-py for NotebookLM access.",
+  "entry": "notebooklm_mcp_server.py",
+  "authority": "AGENTS.md",
+  "language": "python",
+  "runtime": "python>=3.10",
+  "transport": "stdio",
+  "upstream": "notebooklm-py",
+  "official": false,
+  "reviewers": ["python-reviewer"]
+}
