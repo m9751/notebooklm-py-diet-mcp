@@ -15,6 +15,34 @@ Built on [**notebooklm-py**](https://github.com/teng-lin/notebooklm-py) by [Teng
 
 Need granular control over every SDK method? See the full-fat [notebooklm-py-MCP](https://github.com/earlyprototype/notebooklm-py-MCP) (72 individual tools exposed - designed primarily for testing).
 
+## Where to start
+
+| If you are asking… | Start here |
+|---|---|
+| "What is this and what are the rules?" | `AGENTS.md` (routing + hard rules) → `CLAUDE.md` (notes) |
+| "What's the current state / open work?" | `STATUS.md` |
+| "How do I install / test / lint it?" | `## Quick start` below, or `make help` |
+| "Where's the server code?" | `notebooklm_mcp_server.py` (single file — all tools) |
+| "How do I make a slide template?" | `templates/slide_styles.md` |
+| "What can it do beyond the SDK?" | "Beyond the SDK" below |
+
+## Quick start
+
+```bash
+make install     # pip install runtime + dev deps
+make lint        # ruff check + ruff format --check
+make test        # pytest (matches the CI matrix)
+```
+
+`make help` lists all targets. The **Makefile is the canonical command front door** — it mirrors exactly what CI runs, so `make lint` / `make test` locally == the gate on your PR.
+
+## For Claude landing here (read before editing)
+
+1. **Single-file server.** Almost all edits land in `notebooklm_mcp_server.py`.
+2. **stdout is reserved for JSON-RPC** — never `print()` to stdout from tool code (AGENTS.md hard rule #1). Diagnostics go to stderr.
+3. **UTF-8 on every file open**, and **never hardcode cookies** — auth is the upstream browser session.
+4. **Keep 3.10–3.13 compatible** (the CI matrix) and **branch + PR** every change — `main` is protected and CI (`lint` + `test (3.12)`) must pass.
+
 ## Beyond the SDK
 
 This server is not just a thin wrapper. It adds capabilities that the underlying API does not provide:
